@@ -1,5 +1,6 @@
 # import os
 import io
+import json
 import hashlib
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.tools.mcp_tool.mcp_session_manager import SseConnectionParams
@@ -36,21 +37,65 @@ async def get_file_hash(tool_context: ToolContext) -> str:
     except Exception as e:
         return f"Error getting artifact content: {e}"
 
+async def get_json_proof(tool_context: ToolContext) -> str:
+    """
+    This tool is used to get the json proof from the artifact.
+    Args:
+        tool_context: ToolContext
+    Returns:
+        str: The json proof as a string
+    """
+    artifact_ids = await tool_context.list_artifacts()
+    artifact_id = artifact_ids[0]
+    
+
+    print( "--------------------------------")
+    print( "Starting to get the json proof..." )
+    print( "--------------------------------")
+    try:
+        print( "The document type is: ", artifact_id )
+        artifact_content = await tool_context.load_artifact(artifact_id)
+        
+
+        # Get the file content as bytes
+        file_bytes = artifact_content.inline_data.data
+        print( "--------------------------------")
+        print( "The file bytes are: ", file_bytes )
+        print( "--------------------------------")
+
+        # Parse the JSON data
+        json_proof = json.loads(file_bytes)
+        print( "--------------------------------")
+        print( "The json proof is: ", json_proof )
+        print( "--------------------------------")
+        # Return the JSON data as a string
+        return str(json_proof)
+    except Exception as e:
+        return f"Error getting json proof: {e}"
+
 root_agent = LlmAgent(
     model='gemini-2.5-flash',
     name='integritas_agent',
     instruction=f"""\
-You are Integritas Agent — an assistant that securely verifies and stamps digital files using the Minima MCP service.
+        You are Integritas Agent — an assistant that securely verifies and stamps digital files using the Minima MCP service.
 
-Your goals:
-1. When the user uploads a file, run the get_file_hash tool. Use the returned hash to and send it to stamp_data tool to stamp the file.
-2. Verify file authenticity using hash comparison.
-3. Stamp verified files using the Integritas blockchain.
-4. Never modify user files directly.
-5. Always explain each action clearly before performing it.
+        IMPORTANT:
+        Never modify user files directly.
+        Always explain each action clearly before performing it.
+
+        Your have two main tasks:
+
+        1. Stamp_data (stamp the files hash):
+        When the user uploads a non-json file, run the get_file_hash tool. Use the returned hash to and send it to stamp_data tool to stamp the file.
+  
+
+        2. Verify_data (verify the files hash):
+        When the user uploads a json file, run the get_json_proof tool. Use the returned json proof and send it to verify_data tool to verify the file.
+    
     """,
     tools=[
         get_file_hash,
+        get_json_proof,
         MCPToolset(
             connection_params=SseConnectionParams(
                 url='https://integritas.minima.global/mcp-sse/',
